@@ -4,26 +4,47 @@
 <meta charset="UTF-8">
 <title>プリクラ風落書きWebカメラ</title>
 <style>
-  body { text-align:center; font-family:sans-serif; background:#ffe4f0; }
-  video, canvas { border-radius:20px; margin-top:20px; }
-  button, select, input { margin-top:10px; padding:10px; font-size:16px; }
+  body {
+    text-align: center;
+    font-family: sans-serif;
+    background: #ffe4f0;
+  }
+  video, canvas {
+    border-radius: 20px;
+    margin-top: 20px;
+  }
+  button, select, input {
+    margin-top: 10px;
+    padding: 10px;
+    font-size: 16px;
+  }
 </style>
 </head>
 <body>
+
 <h1>プリクラ風落書きWebカメラ</h1>
-<video id="video" width="320" height="240" autoplay></video>
+
+<video id="video" width="320" height="240" autoplay playsinline></video>
 <br>
+
 <button id="snap">撮影📸</button>
 <button id="save">保存💾</button>
 <br>
-<label>色: <input type="color" id="color" value="#ff00aa"></label>
-<label>太さ: <input type="number" id="size" value="5" min="1" max="50"></label>
+
+<label>色:
+  <input type="color" id="color" value="#ff00aa">
+</label>
+<label>太さ:
+  <input type="number" id="size" value="5" min="1" max="50">
+</label>
+
+<br>
 <canvas id="canvas" width="320" height="240"></canvas>
 
 <script>
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-const context = canvas.getContext('2d');
+const ctx = canvas.getContext('2d');
 
 let drawing = false;
 let color = document.getElementById('color').value;
@@ -31,8 +52,8 @@ let size = parseInt(document.getElementById('size').value);
 
 // カメラ起動
 navigator.mediaDevices.getUserMedia({ video: true })
-.then(stream => video.srcObject = stream)
-.catch(err => alert('カメラが使えません: ' + err));
+  .then(stream => video.srcObject = stream)
+  .catch(err => alert('カメラが使えません: ' + err));
 
 // 色・太さ変更
 document.getElementById('color').addEventListener('input', e => color = e.target.value);
@@ -40,57 +61,95 @@ document.getElementById('size').addEventListener('input', e => size = parseInt(e
 
 // 撮影＋プリクラ風加工
 document.getElementById('snap').addEventListener('click', () => {
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  // 鏡写しで撮影
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+  ctx.restore();
 
-    // プリクラ風フィルター
-    let imageData = context.getImageData(0,0,canvas.width,canvas.height);
-    let data = imageData.data;
-    for(let i=0;i<data.length;i+=4){
-        data[i] = Math.min(data[i]*1.3,255);
-        data[i+1] = Math.min(data[i+1]*1.2,255);
-        data[i+2] = Math.min(data[i+2]*1.4,255);
-        if(i>3 && i<data.length-4){
-            data[i] = (data[i]+data[i-4]+data[i+4])/3;
-            data[i+1] = (data[i+1]+data[i-3]+data[i+5])/3;
-            data[i+2] = (data[i+2]+data[i-2]+data[i+6])/3;
-        }
-    }
-    context.putImageData(imageData,0,0);
+  // 美肌＋明るさ調整
+  let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let data = imageData.data;
 
-    // フレーム
-    context.strokeStyle = 'pink';
-    context.lineWidth = 8;
-    context.strokeRect(0,0,canvas.width,canvas.height);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i]   = Math.min(data[i]   * 1.15 + 10, 255); // R
+    data[i+1] = Math.min(data[i+1] * 1.15 + 10, 255); // G
+    data[i+2] = Math.min(data[i+2] * 1.15 + 10, 255); // B
+  }
+  ctx.putImageData(imageData, 0, 0);
 
-    // 日付・文字
-    context.fillStyle='white';
-    context.font='20px sans-serif';
-    const today = new Date();
-    context.fillText(today.getFullYear()+'/'+(today.getMonth()+1)+'/'+today.getDate(),10,canvas.height-10);
-    context.fillText('💖 My Purikura 💖',70,30);
+  // フレーム
+  ctx.strokeStyle = 'hotpink';
+  ctx.lineWidth = 8;
+  ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+  // 日付＆タイトル
+  ctx.fillStyle = 'white';
+  ctx.font = '20px sans-serif';
+  const d = new Date();
+  ctx.fillText(
+    `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`,
+    10,
+    canvas.height - 10
+  );
+  ctx.fillText('💖 My Purikura 💖', 60, 30);
 });
 
 // 保存
 document.getElementById('save').addEventListener('click', () => {
-    const link = document.createElement('a');
-    link.download = 'purikura.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+  const link = document.createElement('a');
+  link.download = 'purikura.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
 });
 
-// 落書き機能
-canvas.addEventListener('mousedown', e => { drawing = true; context.beginPath(); context.moveTo(e.offsetX, e.offsetY); });
-canvas.addEventListener('mousemove', e => {
-    if(drawing){
-        context.strokeStyle = color;
-        context.lineWidth = size;
-        context.lineCap = 'round';
-        context.lineTo(e.offsetX, e.offsetY);
-        context.stroke();
-    }
+// ===== 落書き（マウス） =====
+canvas.addEventListener('mousedown', e => {
+  drawing = true;
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
 });
+
+canvas.addEventListener('mousemove', e => {
+  if (!drawing) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = size;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = color;      // ネオン風
+  ctx.shadowBlur = 10;
+  ctx.lineTo(e.offsetX, e.offsetY);
+  ctx.stroke();
+});
+
 canvas.addEventListener('mouseup', () => drawing = false);
 canvas.addEventListener('mouseleave', () => drawing = false);
+
+// ===== 落書き（スマホ） =====
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  drawing = true;
+  const t = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  ctx.beginPath();
+  ctx.moveTo(t.clientX - rect.left, t.clientY - rect.top);
+});
+
+canvas.addEventListener('touchmove', e => {
+  if (!drawing) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = size;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
+  ctx.lineTo(t.clientX - rect.left, t.clientY - rect.top);
+  ctx.stroke();
+});
+
+canvas.addEventListener('touchend', () => drawing = false);
 </script>
+
 </body>
 </html>
